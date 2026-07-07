@@ -61,8 +61,19 @@ class KerfGrammarDefinition extends GrammarDefinition {
 
     return builder.build();
   }
+  /* ====== Expressions End ====== */
+
+  
+  /* ====== bs Start ====== */
+  final Parser validIdentifier = pattern("a-zA-Z_") & pattern("a-zA-Z0-9_").star().trim();
+  Parser<R> terminator<R>(Parser<R> parser) => parser.skip(after: char(";")).trim();
+  Parser assignment() => terminator(seq2(validIdentifier.skip(after: char("=").trim()), ref(expression)));
+  Parser block() => ref(instructions).skip(before: char("{"), after: char("}"));
+  
+  Parser instruction() => ref(assignment);
+  Parser instructions() => (ref(instruction) | ref(block)).star();
+  /* ====== bs End ====== */
 
   @override
-  Parser<dynamic> start() => ref(expression).end();
-  /* ====== Expressions End ====== */
+  Parser<dynamic> start() => ref(instructions).end();
 }
