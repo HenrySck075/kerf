@@ -1,265 +1,187 @@
-import 'dart:math' as math;
 
-class SyntaxError extends Error {
-  final String message;
-  SyntaxError(this.message);
-
-  @override
-  String toString() => "SyntaxError: $message";
-}
-
-class AST {
+abstract class AST {
   int line = 0;
   int col = 0;
 }
 
-enum AtomType {
-  string, boolean, float, int, list
-}
+/// Abstract base for all expression nodes.
+abstract class Expression extends AST {}
 
-// Every expression syntax is under Atom
-abstract class Atom extends AST {
-  AtomType get type;
+/// Abstract base for literal values.
+abstract class Literal extends Expression {}
 
-  /// Return a new [Atom] that yields the same result as this one, but with fewer instructions. May returns itself.
-  Atom staticOptimize() => this;
-
-  AtomType get childType => type;
-}
-
-abstract class Literal extends Atom {
-  bool isTruthy();
-}
-
-// ignore: camel_case_types
-class String_ extends Literal {
+class StringLiteral extends Literal {
   final String value;
-  String_(this.value);
-
-  @override
-  AtomType get type => .string;
-
-  @override
-  bool isTruthy() => value.isNotEmpty; 
+  StringLiteral(this.value);
 }
 
-class Bool extends Literal {
+class BoolLiteral extends Literal {
   final bool value;
-  Bool(this.value);
-
-  @override
-  AtomType get type => .boolean;
-
-  @override
-  bool isTruthy() => value; 
+  BoolLiteral(this.value);
 }
 
-class Num extends Literal {
+class NumLiteral extends Literal {
   final num value;
-  Num(this.value);
-
-  @override
-  AtomType get type => value is double ? .float : .int;
-
-  @override
-  bool isTruthy() => value != 0; 
+  NumLiteral(this.value);
 }
 
-// ignore: camel_case_types
-class List_ extends Atom {
-  final List<Atom> elements;
-  final AtomType elementType;
-
-  List_(this.elements, AtomType? elementType) 
-  // we do list like c++ for now, sorry
-  // aka every elements must be of the same type
-  : assert(elements.isEmpty || elements.every((e) => e.type == elements.first.type), "All elements of a list must be of the same type.")
-  , assert((elementType == null || elements.isEmpty) || elementType == elements.first.type, "Explicit element type declaration must match the actual type of the elements.")
-  , elementType = elementType ?? elements.first.type;
+class IntLiteral extends NumLiteral {
+  IntLiteral(super.value);
 
   @override
-  AtomType get type => .list;
+  int get value => super.value.toInt();
+}
+class FloatLiteral extends NumLiteral {
+  FloatLiteral(super.value);
 
   @override
-  Atom staticOptimize() {
-    return List_(elements.map((e) => e.staticOptimize()).toList(), elementType);
-  }
-
-  @override
-  AtomType get childType => elementType;
+  double get value => super.value.toDouble();
 }
 
-/* Every parameters should be Atom, precise type should be checked via the AtomType enum. */
+class ListLiteral extends Expression {
+  final List<Expression> elements;
+  final String? explicitTypeName;
 
-enum FactorOp {
-  positive, negative;
+  ListLiteral(this.elements, [this.explicitTypeName]);
 }
-class Factor extends Atom {
+
+enum FactorOp { positive, negative }
+
+class Factor extends Expression {
   final FactorOp op;
-  final Atom atom;
+  final Expression operand;
 
-  Factor(this.op, this.atom)
-  : assert(atom.type == .float || atom.type == .int, "Factor can only be applied to numbers.");
-
-  @override
-  AtomType get type => atom.type;
-
-  @override
-  Atom staticOptimize() {
-    final oAtom = atom.staticOptimize() as Num;
-    switch (op) {
-      case FactorOp.positive:
-        return oAtom;
-      case FactorOp.negative:
-        return Num(-oAtom.value);
-    }
-  }
+  Factor(this.op, this.operand);
 }
 
-class Power extends Atom {
-  final Atom base;
-  final Atom exponent;
+class Power extends Expression {
+  final Expression base;
+  final Expression exponent;
 
-  Power(this.base, this.exponent)
-  : assert(
-    (base.type == .float || base.type == .int) && 
-    (exponent.type != .float && exponent.type != .int)
-  , "Both base and exponent must be numbers.");
-
-  @override
-  AtomType get type => base.type == .int && exponent.type == .int ? .int : .float;
-
-  @override
-  Atom staticOptimize() {
-    final oBase = base.staticOptimize();
-    final oExponent = exponent.staticOptimize();
-
-    if (oBase is Num && oExponent is Num) {
-      return Num(math.pow(oBase.value, oExponent.value));
-    }
-    return Power(oBase, oExponent);
-  }
+  Power(this.base, this.exponent);
 }
 
-enum Operator {
-  plus,minus,multiply,divide,divideInt,modulo
+enum BinaryOperator {
+  plus,
+  minus,
+  multiply,
+  divide,
+  divideInt,
+  modulo,
 }
 
-class Term extends Atom {
-  final Atom left;
-  final Operator op;
-  final Atom right;
+class TwoHandedExpression extends Expression {
+  final Expression left;
+  final Expression right;
 
-  Term(this.left, this.op, this.right)
-  : assert((){
-    if (
-      (
-        (left.type == .float || left.type == .int) && 
-        (right.type != .float && right.type != .int)
-      ) || 
-      (left.type == .boolean || right.type == .boolean)
-    ) {
-      throw SyntaxError("Unsupported operands: ${left.type.name} and ${right.type.name}");
-    }
-    if (left.type == .string) {
-      if (op == .plus && right.type != .string) {
-        throw SyntaxError("Can only concatenate string (not ${right.type.name}) to string");
-      }
-      else if (op == .multiply && right.type != .int) {
-        throw SyntaxError("Can't multiply string by non-int of type ${right.type.name}");
-      }
-    }
-    if (left.type == .list && right.type != .list) {
-      throw SyntaxError("Can only concatenate list (not ${right.type.name}) to list");
-    }
+  TwoHandedExpression(this.left, this.right);
+}
+class BinaryExpr extends TwoHandedExpression {
+  final BinaryOperator op;
 
-    return true;
-  }());  
-
-  @override
-  AtomType get type => left.type;
+  BinaryExpr(super.left, this.op, super.right);
 }
 
-class SBAccessor extends Atom {
-  final Atom atom;
-  final Atom key;
+class IndexAccess extends Expression {
+  final Expression target;
+  final Expression key;
 
-  SBAccessor(this.atom, this.key)
-  : assert(
-    (atom.type == .list || atom.type == .string) && key.type == .int,
-    "Cannot access ${atom.type.name} with ${key.type.name} key"
+  IndexAccess(this.target, this.key);
+}
+
+class Inversion extends Expression {
+  final Expression operand;
+
+  Inversion(this.operand);
+}
+
+class Conjunction extends TwoHandedExpression {
+  Conjunction(super.left, super.right);
+}
+
+class Disjunction extends TwoHandedExpression {
+  Disjunction(super.left, super.right);
+}
+
+class Identifier extends Expression {
+  final String name;
+
+  Identifier(this.name);
+}
+
+//////////////////////////
+// Statements & Program Constructs
+//////////////////////////
+
+class Block extends AST {
+  final List<AST> body;
+
+  Block(this.body);
+}
+
+class Assignment extends AST {
+  final String name;
+  final Expression value;
+
+  Assignment(this.name, this.value);
+}
+
+class Argument extends AST {
+  final String? name;
+  final Expression value;
+
+  Argument(this.value, {this.name});
+}
+
+class FunctionCall extends Expression {
+  final String name;
+  final List<Argument> arguments;
+
+  FunctionCall(this.name, this.arguments);
+}
+
+class ArgumentDef extends AST {
+  final String name;
+  final String typeName;
+
+  ArgumentDef(this.name, this.typeName);
+}
+
+class FunctionDef extends AST {
+  final String name;
+  final List<ArgumentDef> arguments;
+  final String returnTypeName;
+  final Block body;
+
+  FunctionDef(
+    this.name,
+    this.arguments,
+    this.returnTypeName,
+    this.body,
   );
-  
-  @override
-  AtomType get type => atom.childType;
 }
 
-class Inversion extends Atom {
-  final Atom atom;
 
-  Inversion(this.atom);
+abstract class OnEventContext {}
 
-  @override
-  AtomType get type => .boolean;
+class OnFlagClicked extends OnEventContext {}
 
-  @override
-  Atom staticOptimize() {
-    final oAtom = atom.staticOptimize();
-    if (oAtom is Literal) {
-      return Bool(!oAtom.isTruthy());
-    }
-    return this;
-  }
+class OnKeyPressed extends OnEventContext {
+  final String key;
+
+  OnKeyPressed(this.key);
 }
 
-class Conjunction extends Atom {
-  final Atom left;
-  final Atom right;
+class OnMessage extends OnEventContext {
+  final String message;
 
-  Conjunction(this.left, this.right);
-
-  @override
-  AtomType get type => .boolean;
-
-  @override
-  Atom staticOptimize() {
-    final oLeft = left.staticOptimize();
-    if (oLeft is Literal && !oLeft.isTruthy()) {
-      return Bool(false);
-    }
-    final oRight = right.staticOptimize();
-    if (oRight is Literal && !oRight.isTruthy()) {
-      return Bool(false);
-    }
-    if (oLeft is Literal && oRight is Literal) {
-      return Bool(oLeft.isTruthy() && oRight.isTruthy());
-    }
-    return Conjunction(oLeft, oRight);
-  }
+  OnMessage(this.message);
 }
 
-class Disjunction extends Atom {
-  final Atom left;
-  final Atom right;
+class OnEvent extends AST {
+  final OnEventContext context;
+  final Block body;
 
-  Disjunction(this.left, this.right);
-
-  @override
-  AtomType get type => .boolean;
-
-  @override
-  Atom staticOptimize() {
-    final oLeft = left.staticOptimize();
-    if (oLeft is Literal && oLeft.isTruthy()) {
-      return Bool(true);
-    }
-    final oRight = right.staticOptimize();
-    if (oRight is Literal && oRight.isTruthy()) {
-      return Bool(true);
-    }
-    if (oLeft is Literal && oRight is Literal) {
-      return Bool(oLeft.isTruthy() && oRight.isTruthy());
-    }
-    return Conjunction(oLeft, oRight);
-  }
+  OnEvent(this.context, this.body);
 }
+
