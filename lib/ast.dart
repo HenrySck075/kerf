@@ -119,11 +119,17 @@ class Block extends AST {
   Block(this.body);
 }
 
+/* Top-Level Instructions */
+
 class Assignment extends AST {
   final String name;
   final Expression value;
 
   Assignment(this.name, this.value);
+}
+
+class Declaration extends Assignment {
+  Declaration(super.name, super.value);
 }
 
 class Argument extends AST {
@@ -185,3 +191,11 @@ class OnEvent extends AST {
   OnEvent(this.context, this.body);
 }
 
+
+/* Event */
+class Emit extends AST {
+  final Expression message;
+  final bool wait;
+
+  Emit(this.message, this.wait);
+}

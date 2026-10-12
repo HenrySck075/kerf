@@ -74,6 +74,7 @@ class KerfGrammarDefinition extends GrammarDefinition {
   /* ====== Instructions Start ====== */
   /*    ==== Assignment Start ====    */
   final Parser<String> validIdentifier = (pattern("a-zA-Z_") & pattern("a-zA-Z0-9_").star()).trim().flatten();
+  Parser<Identifier> identifier() => validIdentifier.map((s)=>Identifier(s));
   Parser<R> terminator<R>(Parser<R> parser) => parser.skip(after: char(";")).trim();
 
   Parser<(String, Expression)> namedArgument() => seq2(validIdentifier.skip(after: char("=").trim()), ref0(expression));
@@ -83,9 +84,12 @@ class KerfGrammarDefinition extends GrammarDefinition {
   ).cast();
   Parser<List<Argument>> arguments() => ref0(argument).starSeparated(char(",")).map((e)=>e.elements.cast<Argument>());
 
-  Parser<AST> assignment() 
+  Parser<Assignment> assignment() 
   => terminator(ref0(namedArgument))
     .map((t)=>Assignment(t.$1, t.$2));
+
+  Parser<Declaration> declaration()
+  => assignment().skip(before: string("let") & whitespace().plus()).map((t)=>Declaration(t.name, t.value));
   /*     ==== Assignment End ====     */
 
   /* ==== Top-Level Instructions Start ==== */
@@ -96,7 +100,7 @@ class KerfGrammarDefinition extends GrammarDefinition {
     primitiveRule().optional()
   ).map2((name, type)=>ArgumentDef(name, type)).cast<ArgumentDef>().starSeparated(char(",")).map((e)=>e.elements.cast<ArgumentDef>());
 
-  Parser<AST> function() 
+  Parser<FunctionDef> function() 
   => seq4(
     primitiveRule(),
     validIdentifier,
@@ -118,9 +122,9 @@ class KerfGrammarDefinition extends GrammarDefinition {
     => strings().skip(before: string("message") & whitespace())
       .map((msg)=>OnMessage(msg.value));
 
-  Parser<AST> onEvent()
+  Parser<OnEvent> onEvent()
   => seq3(
-    string("on").trim(),
+    (string("on") & whitespace().plus()).trim(),
     (
       ref0(onEventFlag) |
       ref0(onEventKeyPress) |
@@ -130,13 +134,34 @@ class KerfGrammarDefinition extends GrammarDefinition {
   ).map3((_, ctx, b)=>OnEvent(ctx, b));
   /*           === When End ===             */
 
+  /*  ==== Top-Level Instructions End ====  */
+
+  /* Motion */
+
+  /* Events */
+  Parser<Emit> emit() 
+    => seq2(
+      (char("!").optional() & string("emit")).trim().flatten(),
+      (ref0(strings) | ref0(identifier)).cast<Expression>() 
+    )
+      .map2((estmt, s)=>Emit(s, !estmt.startsWith("!")));
   
+
+
+  /* lore */
   late final List<Parser<AST>> instructions = [
     ref0(assignment),
-    ref0(block)
+    ref0(declaration),
+    ref0(block),
+
+    ref0(emit)
   ];
-  Parser<Block> block() => instructions.toChoiceParser().cast<AST>().star().skip(before: char("{"), after: char("}")).map((e)=>Block(e));
-  Parser<List<AST>> tlInstructions() => [ref0(function)].toChoiceParser().cast<AST>().star();
+  Parser<Block> block() => instructions.toChoiceParser().star().skip(before: char("{"), after: char("}")).map((e)=>Block(e));
+  Parser<List<AST>> tlInstructions() => [
+    ref0(declaration),
+    ref0(function),
+    ref0(onEvent)
+  ].toChoiceParser().cast<AST>().star();
   /* ====== Instructions End ====== */
 
   @override
