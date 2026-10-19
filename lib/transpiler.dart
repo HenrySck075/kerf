@@ -1,7 +1,7 @@
 import 'package:kerf/grammar.dart';
 import 'package:kerf/semantics.dart';
-
-
+import 'package:kerf/ir.dart' as ir;
+import 'package:kerf/ast.dart';
 
 class FileTranspiler {
   final SemanticAnalyzer analyzer = SemanticAnalyzer();
@@ -9,13 +9,16 @@ class FileTranspiler {
   void transpile(String content, {bool forPenguin = false}) {
     final ast = KerfGrammarDefinition().build().parse(content);
 
-    /// special variables
-    analyzer.globalScope.declare("spriteX", PrimitiveSymbol(.float));
-    analyzer.globalScope.declare("spriteY", PrimitiveSymbol(.float));
-    analyzer.globalScope.declare("spriteRot", PrimitiveSymbol(.float));
-
     for (final node in ast.value) {
       analyzer.analyze(node, analyzer.globalScope);
     }
+
+
+  }
+
+  Sprite constructIR(List<AST> tlNodes) {
+    final s = ir.Sprite();
+
+
   }
 }

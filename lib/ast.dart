@@ -1,7 +1,7 @@
 
 abstract class AST {
-  int line = 0;
-  int col = 0;
+  int start = 0;
+  int stop = 0;
 }
 
 /// Abstract base for all expression nodes.
@@ -109,6 +109,22 @@ class Identifier extends Expression {
   Identifier(this.name);
 }
 
+// Special Expressions
+enum SPEProperty {x, y, rotation}
+class SpritePositionExpr extends Expression {
+  final SPEProperty property;
+
+  SpritePositionExpr(this.property);
+}
+
+enum TouchTarget {mouse, edge, sprite}
+class TouchingExpr extends Expression {
+  final TouchTarget target;
+  final String? spriteId; // lets just leave it here
+
+  TouchingExpr(this.target, [this.spriteId]);
+}
+
 //////////////////////////
 // Statements & Program Constructs
 //////////////////////////
@@ -119,17 +135,24 @@ class Block extends AST {
   Block(this.body);
 }
 
+class Comment extends AST {
+  final String text;
+
+  Comment(this.text);
+}
+
 /* Top-Level Instructions */
 
 class Assignment extends AST {
   final String name;
   final Expression value;
+  final bool isConst;
 
-  Assignment(this.name, this.value);
+  Assignment(this.name, this.value, [this.isConst = false]);
 }
 
 class Declaration extends Assignment {
-  Declaration(super.name, super.value);
+  Declaration(super.name, super.value, [super.isConst]);
 }
 
 class Argument extends AST {
@@ -168,6 +191,7 @@ class FunctionDef extends AST {
 }
 
 
+/* Event */
 abstract class OnEventContext {}
 
 class OnFlagClicked extends OnEventContext {}
@@ -192,10 +216,47 @@ class OnEvent extends AST {
 }
 
 
-/* Event */
 class Emit extends AST {
   final Expression message;
   final bool wait;
 
   Emit(this.message, this.wait);
+}
+
+
+/* Controls */
+class If extends AST {
+  final Expression condition;
+  final Block thenBlock;
+  final Block? elseBlock;
+
+  If(this.condition, this.thenBlock, [this.elseBlock]);
+}
+
+class Repeat extends AST {
+  final Expression count;
+  final Block body;
+
+  Repeat(this.count, this.body);
+}
+
+/// aka repeat until
+class While extends AST {
+  final Expression condition;
+  final Block body;
+
+  While(this.condition, this.body);
+} 
+
+class Forever extends AST {
+  final Block body;
+
+  Forever(this.body);
+}
+
+class Sleep extends AST {
+  final Expression instruction;
+  final bool asSleepUntil;
+  
+  Sleep(this.instruction, {this.asSleepUntil = false});
 }

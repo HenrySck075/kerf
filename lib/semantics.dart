@@ -31,6 +31,19 @@ class FunctionArgSymbol extends PrimitiveSymbol {
   }
 }
 
+// == Special Expression Markers start ==
+abstract class SpecialExprSymbol extends PrimitiveSymbol {
+  SpecialExprSymbol(super.type);
+}
+
+class SpritePositionSEP extends SpecialExprSymbol {
+  SpritePositionSEP() : super(.float);
+}
+class TouchingSEP extends SpecialExprSymbol {
+  TouchingSEP() : super(.bool);
+}
+// == Special Expression Markers end ==
+
 class SymbolTable {
   final Map<String, SymbolType> _symbols = {};
   final SymbolTable? parent;
@@ -47,9 +60,21 @@ class SemanticAnalyzer {
   final SymbolTable globalScope = SymbolTable();
   final Map<Block, SymbolTable> localScopes = {};
 
-  SymbolType _analyzeExpression(Expression expr) {
+  SymbolType _analyzeExpression(Expression expr, SymbolTable scope) {
+    if (expr is SpritePositionExpr) {
+      return SpritePositionSEP();
+    } else if (expr is TouchingExpr) {
+      return TouchingSEP();
+    }
+    else if (expr is Identifier) {
+      final symbol = scope.lookup(expr.name);
+      if (symbol == null) {
+        throw Exception("Undefined identifier: ${expr.name}");
+      }
+      return symbol;
+    }
     // primitives
-    if (expr is StringLiteral) {
+    else if (expr is StringLiteral) {
       return PrimitiveSymbol(.str);
     } else if (expr is IntLiteral) {
       return PrimitiveSymbol(.int); 
@@ -75,7 +100,7 @@ class SemanticAnalyzer {
         throw Exception("Argument count mismatch for function: ${expr.name}");
       }
       for (var i = 0; i < expr.arguments.length; i++) {
-        final argType = _analyzeExpression(expr.arguments[i].value);
+        final argType = _analyzeExpression(expr.arguments[i].value, scope);
         if (argType is! PrimitiveSymbol || argType.type != symbol.arguments[i]) {
           throw Exception("Argument type mismatch for function: ${expr.name}");
         }
@@ -85,8 +110,8 @@ class SemanticAnalyzer {
 
     // arithmetic operations
     else if (expr is BinaryExpr) {
-      final leftType = _analyzeExpression(expr.left);
-      final rightType = _analyzeExpression(expr.right);
+      final leftType = _analyzeExpression(expr.left, scope);
+      final rightType = _analyzeExpression(expr.right, scope);
       if (leftType is! PrimitiveSymbol || rightType is! PrimitiveSymbol) {
         throw Exception("Invalid operand types for binary expression");
       }
@@ -125,8 +150,8 @@ class SemanticAnalyzer {
 
     // other expressions
     else if (expr is IndexAccess) {
-      final targetType = _analyzeExpression(expr.target);
-      final keyType = _analyzeExpression(expr.key);
+      final targetType = _analyzeExpression(expr.target, scope);
+      final keyType = _analyzeExpression(expr.key, scope);
       if (targetType is! PrimitiveSymbol || targetType.type != .list) {
         throw Exception("Indexing is only supported on lists");
       }
@@ -138,15 +163,15 @@ class SemanticAnalyzer {
     }
 
     else if (expr is Inversion) {
-      final operandType = _analyzeExpression(expr.operand);
+      final operandType = _analyzeExpression(expr.operand, scope);
       if (operandType is! PrimitiveSymbol || operandType.type != .bool) {
         throw Exception("Inversion is only supported on boolean expressions");
       }
       return PrimitiveSymbol(.bool);
     } else if (expr is Conjunction || expr is Disjunction) {
       final thexpr = expr as TwoHandedExpression;
-      final leftType = _analyzeExpression(thexpr.left);
-      final rightType = _analyzeExpression(thexpr.right);
+      final leftType = _analyzeExpression(thexpr.left, scope);
+      final rightType = _analyzeExpression(thexpr.right, scope);
       if (leftType is! PrimitiveSymbol || leftType.type != .bool ||
           rightType is! PrimitiveSymbol || rightType.type != .bool) {
         throw Exception("Logical operations are only supported on boolean expressions");
@@ -211,7 +236,7 @@ class SemanticAnalyzer {
       }
       case Declaration(:final name, :final value): {
         final existingType = symbols.lookup(name);
-        final valueType = _analyzeExpression(value);
+        final valueType = _analyzeExpression(value, symbols);
         if (existingType == null) {
           symbols.declare(name, valueType);
         } else {
@@ -220,7 +245,7 @@ class SemanticAnalyzer {
       }
       case Assignment(:final name, :final value): {
         final existingType = symbols.lookup(name);
-        final valueType = _analyzeExpression(value);
+        final valueType = _analyzeExpression(value, symbols);
         if (existingType == null) {
           throw NameError(name);
         } else if (existingType != valueType) {
