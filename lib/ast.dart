@@ -135,6 +135,7 @@ class Block extends AST {
   Block(this.body);
 }
 
+
 class Comment extends AST {
   final String text;
 
@@ -143,16 +144,13 @@ class Comment extends AST {
 
 /* Top-Level Instructions */
 
-class Assignment extends AST {
+// this isnt actually a tl instruction
+class Declaration extends AST {
   final String name;
   final Expression value;
+
   final bool isConst;
-
-  Assignment(this.name, this.value, [this.isConst = false]);
-}
-
-class Declaration extends Assignment {
-  Declaration(super.name, super.value, [super.isConst]);
+  Declaration(this.name, this.value, [this.isConst = false]);
 }
 
 class Argument extends AST {
@@ -260,3 +258,14 @@ class Sleep extends AST {
   
   Sleep(this.instruction, {this.asSleepUntil = false});
 }
+
+
+/* Variable */
+class Assignment extends AST {
+  final String name;
+  final Expression value;
+
+  Assignment(this.name, this.value);
+}
+
+

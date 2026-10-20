@@ -13,7 +13,7 @@ class PrimitiveSymbol extends SymbolType {
 
 class FunctionSymbol extends SymbolType {
   PrimitiveType returnType;
-  List<PrimitiveType> arguments;
+  List<FunctionArgSymbol> arguments;
   Map<String, int> argumentPos; // for named lookup
 
   FunctionSymbol(this.returnType, this.arguments, this.argumentPos);
@@ -225,12 +225,12 @@ class SemanticAnalyzer {
         // TODO: check if the body actually returns the correct type
       ): {
         final returnType = _typeNameToEnum(returnTypeName);
-        final argTypes = arguments.map((arg) => _typeNameToEnum(arg.typeName)).toList();
+        final argSymbols = arguments.map((arg) => FunctionArgSymbol(_typeNameToEnum(arg.typeName))).toList();
         final argPos = {for (var i = 0; i < arguments.length; i++) arguments[i].name: i};
-        symbols.declare(name, FunctionSymbol(returnType, argTypes, argPos));
+        symbols.declare(name, FunctionSymbol(returnType, argSymbols, argPos));
         final localScope = createLocalScopeFor(node.body, symbols);
-        for (final arg in arguments) {
-          localScope.declare(arg.name, FunctionArgSymbol(_typeNameToEnum(arg.typeName)));
+        for (final (i,arg) in arguments.indexed) {
+          localScope.declare(arg.name, argSymbols[i]);
         }
         analyze(node.body, symbols);
       }
